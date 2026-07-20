@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "narh-yolo-align"
+version = "0.1.0"
+description = "Label-free calibration dataset builder for YOLO edge export."
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "Apache-2.0"}
+authors = [{name = "ZC502"}]
+dependencies = [
+  "ultralytics>=8.0.0",
+  "onnxruntime>=1.16.0",
+  "opencv-python>=4.8.0",
+  "numpy>=1.23.0",
+  "PyYAML>=6.0",
+]
+
+[project.scripts]
+narh-yolo-align = "narh_yolo_align.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["narh_yolo_align*"]
