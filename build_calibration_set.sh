@@ -12,7 +12,9 @@ set -euo pipefail
 # If you only have a .pt model, first export an ONNX target, for example:
 #   yolo export model=best.pt format=onnx imgsz=640 opset=12 simplify=True
 #
-# For v0.1, start with ONNX FP32 / ONNX INT8 before trying TensorRT/RKNN/Hailo.
+# v0.1 recommendation:
+#   First test PyTorch FP32 vs ONNX FP32.
+#   Then test PyTorch FP32 vs ONNX INT8.
 
 REF="${1:-best.pt}"
 TARGET="${2:-best_int8.onnx}"
@@ -30,13 +32,26 @@ IOU="${IOU:-0.70}"
 MATCH_IOU="${MATCH_IOU:-0.50}"
 REP_RATIO="${REP_RATIO:-0.70}"
 
+# Prefer installed CLI. Fall back to module execution for local development.
+if command -v narh-yolo-align >/dev/null 2>&1; then
+  CMD=(narh-yolo-align)
+else
+  echo "[NOTICE] 'narh-yolo-align' CLI not found in PATH."
+  echo "[NOTICE] Falling back to: python -m narh_yolo_align.cli"
+  CMD=(python -m narh_yolo_align.cli)
+fi
+
 if [[ ! -f "$REF" ]]; then
   echo "[ERROR] Reference .pt model not found: $REF" >&2
+  echo "" >&2
+  echo "Expected usage:" >&2
+  echo "  bash examples/build_calibration_set.sh best.pt best_int8.onnx raw_field_frames consistency_workspace" >&2
   exit 1
 fi
 
 if [[ ! -f "$TARGET" ]]; then
   echo "[ERROR] Target ONNX model not found: $TARGET" >&2
+  echo "" >&2
   echo "Export one first, for example:" >&2
   echo "  yolo export model=$REF format=onnx imgsz=$IMGSZ opset=12 simplify=True" >&2
   exit 1
@@ -44,20 +59,50 @@ fi
 
 if [[ ! -d "$SOURCE" ]]; then
   echo "[ERROR] Source image folder not found: $SOURCE" >&2
+  echo "" >&2
+  echo "Create it and put unlabeled JPG/PNG/WebP/BMP images inside:" >&2
+  echo "  mkdir -p $SOURCE" >&2
+  echo "  cp /path/to/your/images/* $SOURCE/" >&2
+  echo "" >&2
+  echo "Then rerun:" >&2
+  echo "  bash examples/build_calibration_set.sh $REF $TARGET $SOURCE $OUT" >&2
+  exit 1
+fi
+
+IMAGE_COUNT="$(
+  find "$SOURCE" -type f \( \
+    -iname '*.jpg' -o \
+    -iname '*.jpeg' -o \
+    -iname '*.png' -o \
+    -iname '*.bmp' -o \
+    -iname '*.webp' \
+  \) | wc -l | tr -d ' '
+)"
+
+if [[ "$IMAGE_COUNT" == "0" ]]; then
+  echo "[ERROR] Source folder exists but contains no supported images: $SOURCE" >&2
+  echo "" >&2
+  echo "Supported extensions:" >&2
+  echo "  .jpg .jpeg .png .bmp .webp" >&2
+  echo "" >&2
+  echo "Put unlabeled field images into:" >&2
+  echo "  $SOURCE" >&2
   exit 1
 fi
 
 echo "[NARH-YOLO Align] Running label-free calibration dataset build"
-echo "  ref:       $REF"
-echo "  target:    $TARGET"
-echo "  source:    $SOURCE"
-echo "  out:       $OUT"
-echo "  imgsz:     $IMGSZ"
-echo "  device:    $DEVICE"
-echo "  max imgs:  $MAX_IMAGES"
+echo "  ref:          $REF"
+echo "  target:       $TARGET"
+echo "  source:       $SOURCE"
+echo "  source imgs:  $IMAGE_COUNT"
+echo "  out:          $OUT"
+echo "  imgsz:        $IMGSZ"
+echo "  device:       $DEVICE"
+echo "  max imgs:     $MAX_IMAGES"
+echo "  batch size:   $BATCH_SIZE"
 echo ""
 
-narh-yolo-align build \
+"${CMD[@]}" build \
   --ref "$REF" \
   --target "$TARGET" \
   --source "$SOURCE" \
